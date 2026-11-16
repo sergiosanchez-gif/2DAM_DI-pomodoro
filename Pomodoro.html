@@ -1,0 +1,2171 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>25:00 - PomoFlow Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF.js CDN para renderizado de apuntes en PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        };
+    </script>
+    <script>
+        // Aplicar tema guardado antes del primer pintado para evitar parpadeos
+        (function () {
+            try {
+                const rawState = localStorage.getItem('pomoflow_state_v2');
+                if (rawState) {
+                    const parsed = JSON.parse(rawState);
+                    if (parsed && (parsed.theme === 'light' || parsed.theme === 'dark')) {
+                        document.documentElement.setAttribute('data-theme', parsed.theme);
+                        return;
+                    }
+                }
+                const savedTheme = localStorage.getItem('pomoflow_theme');
+                if (savedTheme === 'light' || savedTheme === 'dark') {
+                    document.documentElement.setAttribute('data-theme', savedTheme);
+                } else {
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                }
+            } catch (e) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+        })();
+    </script>
+    <style>
+        /* Variables de diseño para Modo Oscuro (por defecto) y Modo Claro */
+        :root,
+        [data-theme="dark"] {
+            --bg-body: #0b1120;
+            --bg-card: #151e32;
+            --bg-subcard: #0f172a;
+            --bg-input: #0b1120;
+            --border-color: #243049;
+            --text-primary: #f1f5f9;
+            --text-muted: #94a3b8;
+            --quad-do-bg: rgba(127, 29, 29, 0.22);
+            --quad-do-border: rgba(239, 68, 68, 0.45);
+            --quad-plan-bg: rgba(30, 58, 138, 0.24);
+            --quad-plan-border: rgba(59, 130, 246, 0.45);
+            --quad-del-bg: rgba(120, 53, 15, 0.24);
+            --quad-del-border: rgba(245, 158, 11, 0.45);
+            --quad-elim-bg: rgba(30, 41, 59, 0.55);
+            --quad-elim-border: rgba(100, 116, 139, 0.45);
+            --scrollbar-track: #0b1120;
+            --scrollbar-thumb: #243049;
+            --scrollbar-thumb-hover: #334155;
+        }
+
+        [data-theme="light"] {
+            --bg-body: #f1f5f9;
+            --bg-card: #ffffff;
+            --bg-subcard: #f8fafc;
+            --bg-input: #f8fafc;
+            --border-color: #cbd5e1;
+            --text-primary: #0f172a;
+            --text-muted: #475569;
+            --quad-do-bg: rgba(254, 226, 226, 0.65);
+            --quad-do-border: rgba(239, 68, 68, 0.45);
+            --quad-plan-bg: rgba(219, 234, 254, 0.65);
+            --quad-plan-border: rgba(59, 130, 246, 0.45);
+            --quad-del-bg: rgba(254, 243, 199, 0.65);
+            --quad-del-border: rgba(245, 158, 11, 0.45);
+            --quad-elim-bg: rgba(241, 245, 249, 0.85);
+            --quad-elim-border: rgba(148, 163, 184, 0.55);
+            --scrollbar-track: #e2e8f0;
+            --scrollbar-thumb: #94a3b8;
+            --scrollbar-thumb-hover: #64748b;
+        }
+
+        html, body {
+            max-width: 100%;
+            overflow-x: hidden;
+            transition: background-color 0.25s ease, color 0.25s ease;
+        }
+
+        .theme-body {
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+        }
+
+        .theme-card {
+            background-color: var(--bg-card);
+            border-color: var(--border-color);
+            box-shadow: 0 10px 25px -5px rgba(2, 6, 23, 0.22);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+
+        .theme-subcard {
+            background-color: var(--bg-subcard);
+            border-color: var(--border-color);
+            transition: background-color 0.25s ease, border-color 0.25s ease;
+        }
+
+        .theme-input {
+            background-color: var(--bg-input);
+            border-color: var(--border-color);
+            color: var(--text-primary);
+            transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+        }
+
+        .theme-text {
+            color: var(--text-primary);
+        }
+
+        .theme-muted {
+            color: var(--text-muted);
+        }
+
+        .theme-border {
+            border-color: var(--border-color);
+        }
+
+        /* Cuadrantes Eisenhower adaptables al tema */
+        .quad-do {
+            background-color: var(--quad-do-bg);
+            border-color: var(--quad-do-border);
+        }
+        .quad-plan {
+            background-color: var(--quad-plan-bg);
+            border-color: var(--quad-plan-border);
+        }
+        .quad-delegate {
+            background-color: var(--quad-del-bg);
+            border-color: var(--quad-del-border);
+        }
+        .quad-eliminate {
+            background-color: var(--quad-elim-bg);
+            border-color: var(--quad-elim-border);
+        }
+
+        /* Scrollbar personalizado sutil */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--scrollbar-track);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--scrollbar-thumb);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--scrollbar-thumb-hover);
+        }
+
+        /* Salto de línea forzado para textos largos sin espacios */
+        .wrap-task-text {
+            white-space: normal;
+            overflow-wrap: anywhere;
+            word-break: break-word;
+            hyphens: auto;
+        }
+
+        /* Rejilla adaptativa principal (1 col móvil, 2 cols tablet, 3 cols escritorio) */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        @media (min-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .col-center-desktop {
+                grid-column: span 2 / span 2;
+            }
+        }
+
+        @media (min-width: 1100px) {
+            .dashboard-grid {
+                grid-template-columns: 310px minmax(0, 1.35fr) minmax(0, 1fr);
+            }
+            .col-center-desktop {
+                grid-column: span 1 / span 1;
+            }
+        }
+
+        /* Rejilla 2x2 contenida de la Matriz de Eisenhower (1 col en pantallas muy estrechas) */
+        .eisenhower-matrix-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+        }
+
+        @media (min-width: 540px) {
+            .eisenhower-matrix-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        /* Evitar auto-zoom en inputs en iOS manteniendo buena legibilidad táctil */
+        @media (max-width: 640px) {
+            input[type="text"],
+            input[type="number"],
+            input[type="time"],
+            select {
+                font-size: 16px !important;
+            }
+        }
+
+        /* Animación de entrada para notificaciones */
+        @keyframes slideDownFade {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -16px);
+            }
+            100% {
+                opacity: 1;
+                transform: translate(-50%, 0);
+            }
+        }
+
+        .notification-enter {
+            animation: slideDownFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .pdf-dropzone-active {
+            border-color: #38bdf8 !important;
+            background-color: rgba(56, 189, 248, 0.12) !important;
+        }
+
+        /* Estilo de alto contraste para el control deslizante de volumen */
+        input[type="range"].volume-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+            cursor: pointer;
+        }
+        input[type="range"].volume-slider::-webkit-slider-runnable-track {
+            height: 6px;
+            border-radius: 9999px;
+            background: #334155;
+            border: 1px solid #64748b;
+        }
+        [data-theme="light"] input[type="range"].volume-slider::-webkit-slider-runnable-track {
+            background: #cbd5e1;
+            border: 1px solid #94a3b8;
+        }
+        input[type="range"].volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 9999px;
+            background: #38bdf8;
+            border: 2px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+            margin-top: -6px;
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+        input[type="range"].volume-slider::-webkit-slider-thumb:hover {
+            background: #7dd3fc;
+            transform: scale(1.12);
+        }
+        input[type="range"].volume-slider::-moz-range-track {
+            height: 6px;
+            border-radius: 9999px;
+            background: #334155;
+            border: 1px solid #64748b;
+        }
+        [data-theme="light"] input[type="range"].volume-slider::-moz-range-track {
+            background: #cbd5e1;
+            border: 1px solid #94a3b8;
+        }
+        input[type="range"].volume-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 9999px;
+            background: #38bdf8;
+            border: 2px solid #ffffff;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+            transition: transform 0.15s ease, background-color 0.15s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen theme-body font-sans antialiased p-3 sm:p-5 lg:p-6 flex flex-col gap-5">
+
+    <!-- MODAL DE CONFIRMACIÓN PERSONALIZADO PARA REINICIAR DATOS -->
+    <div id="reset-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="reset-modal-title" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm">
+        <div class="theme-card border-2 border-[#ef4444]/60 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-10 h-10 rounded-full bg-red-500/15 border border-red-500/40 flex items-center justify-center text-xl shrink-0">
+                    ⚠️
+                </div>
+                <h3 id="reset-modal-title" class="text-base sm:text-lg font-bold theme-text">
+                    ¿Reiniciar todos los datos?
+                </h3>
+            </div>
+            <p class="text-xs sm:text-sm theme-muted leading-relaxed mb-5">
+                Se borrarán tus tareas de la Matriz, bloques de Time Blocking, eventos del Horario, estadísticas de logros y marcadores de PDF guardados. Esta acción no se puede deshacer.
+            </p>
+            <div class="flex items-center justify-end gap-2.5">
+                <button type="button" onclick="closeResetModal()" class="theme-subcard border theme-text hover:border-slate-400 text-xs sm:text-sm font-semibold px-4 py-2 rounded-lg transition cursor-pointer">
+                    Cancelar
+                </button>
+                <button type="button" onclick="confirmResetAllData()" class="bg-[#ef4444] hover:bg-red-500 active:scale-95 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-lg shadow-md shadow-red-950/40 transition cursor-pointer">
+                    Sí, borrar todo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- NOTIFICACIÓN FLOTANTE PARA AVISOS DE TAREAS COMPLETADAS, CICLOS Y ALARMAS -->
+    <div id="toast-notification" role="status" aria-live="polite" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md theme-card border-2 border-[#34d399] rounded-xl px-4 py-3.5 shadow-2xl flex items-start gap-3">
+        <div id="toast-icon" class="w-9 h-9 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-lg shrink-0 mt-0.5">
+            ✅
+        </div>
+        <div class="flex-1 min-w-0">
+            <p id="toast-title" class="text-xs font-bold uppercase tracking-wider text-emerald-500 mb-0.5">
+                Aviso
+            </p>
+            <p id="toast-message" class="text-xs sm:text-sm font-semibold theme-text wrap-task-text">
+                Mensaje de notificación
+            </p>
+        </div>
+        <button type="button" onclick="hideNotification()" aria-label="Cerrar aviso" class="theme-muted hover:text-[#ef4444] text-sm font-bold px-1.5 py-0.5 rounded transition cursor-pointer shrink-0">
+            ✕
+        </button>
+    </div>
+
+    <!-- 1. CABECERA SUPERIOR -->
+    <header class="w-full max-w-[1440px] mx-auto theme-card border rounded-xl px-4 sm:px-5 py-3.5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3.5">
+        <div class="flex items-center justify-between gap-2.5 min-w-0">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <span class="text-2xl sm:text-3xl select-none shrink-0" role="img" aria-label="Tomate">🍅</span>
+                <h1 class="text-lg sm:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-[#38bdf8] to-[#34d399] bg-clip-text text-transparent truncate">
+                    PomoFlow Dashboard
+                </h1>
+                <span id="save-status-indicator" title="Los cambios se guardan automáticamente en este navegador" class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full theme-subcard border text-emerald-500 shrink-0 transition-all">
+                    <span>💾</span>
+                    <span id="save-status-text">Guardado</span>
+                </span>
+            </div>
+
+            <!-- Controles rápidos en móvil (Tema + Reiniciar) -->
+            <div class="flex sm:hidden items-center gap-1.5 shrink-0">
+                <button type="button" onclick="openResetModal()" title="Reiniciar datos guardados" aria-label="Reiniciar datos" class="theme-subcard border text-red-400 hover:border-red-400 text-xs font-semibold px-2.5 py-2 rounded-lg transition cursor-pointer">
+                    🗑️
+                </button>
+                <button id="theme-toggle-btn-mobile" type="button" onclick="toggleTheme()" aria-label="Alternar modo claro y oscuro" class="theme-subcard border theme-text text-xs font-semibold px-2.5 py-2 rounded-lg hover:border-[#38bdf8] transition flex items-center gap-1 cursor-pointer">
+                    <span class="theme-toggle-label">☀️ Claro</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <span class="hidden xl:inline text-xs font-semibold theme-muted">Música de Foco</span>
+            <label for="sound-selector" class="sr-only">Seleccionar sonido de estudio</label>
+            <select id="sound-selector" onchange="handleSoundSelectionChange()" class="flex-1 sm:flex-initial min-w-0 theme-input border hover:border-[#38bdf8]/60 focus:border-[#38bdf8] rounded-lg px-3 py-2 text-xs sm:text-sm font-medium focus:outline-none cursor-pointer">
+                <option value="alfa">Ondas Alfa (10 Hz · Enfoque)</option>
+                <option value="theta">Ondas Theta (6 Hz · Profundo)</option>
+                <option value="white">Ruido Blanco (Bloqueo)</option>
+                <option value="brown">Ruido Marrón / Lluvia</option>
+                <option value="zen">Ambiente Zen / Acordes</option>
+            </select>
+
+            <div class="flex items-center gap-2 theme-subcard border border-slate-500/50 rounded-lg px-2.5 py-1.5" title="Volumen de sonido">
+                <button type="button" id="volume-mute-btn" onclick="toggleMuteVolume()" aria-label="Silenciar o activar sonido" title="Silenciar / Activar volumen" class="text-sm theme-text hover:text-[#38bdf8] select-none cursor-pointer transition">🔊</button>
+                <input id="music-volume" type="range" min="0" max="100" value="65" oninput="updateMusicVolume(this.value)" aria-label="Volumen de música" class="volume-slider w-20 sm:w-24">
+                <span id="music-volume-label" class="font-mono text-[11px] font-bold text-[#38bdf8] min-w-[32px] text-right select-none">65%</span>
+            </div>
+
+            <button id="music-toggle-btn" type="button" onclick="toggleAmbientMusic()" class="bg-[#6366f1] hover:bg-indigo-500 active:scale-95 text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-lg shadow-md shadow-indigo-950/30 transition flex items-center gap-1.5 cursor-pointer shrink-0">
+                <span id="music-btn-icon">🎵</span>
+                <span id="music-btn-text">Play</span>
+            </button>
+
+            <button id="theme-toggle-btn" type="button" onclick="toggleTheme()" aria-label="Alternar modo claro y oscuro" class="hidden sm:flex theme-subcard border theme-text text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg hover:border-[#38bdf8] transition items-center gap-1.5 cursor-pointer shrink-0">
+                <span class="theme-toggle-label">☀️ Claro</span>
+            </button>
+
+            <button type="button" onclick="openResetModal()" title="Reiniciar todos los datos guardados" class="hidden sm:flex theme-subcard border text-red-400 hover:bg-red-500/10 hover:border-red-400/60 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition items-center gap-1.5 cursor-pointer shrink-0">
+                <span>🗑️</span>
+                <span>Reiniciar datos</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- CONTENEDOR PRINCIPAL ADAPTATIVO (1 col móvil, 2 cols tablet, 3 cols escritorio) -->
+    <main class="w-full max-w-[1440px] mx-auto dashboard-grid gap-5 flex-1">
+
+        <!-- 2. COLUMNA IZQUIERDA (Temporizador Pomodoro + Logros) -->
+        <div class="flex flex-col gap-5 min-w-0">
+
+            <!-- Tarjeta Temporizador Pomodoro -->
+            <section id="pomodoro-card" class="theme-card border border-t-4 border-t-[#38bdf8] rounded-xl p-5 flex flex-col items-center">
+                <h2 id="timer-status-title" class="text-base sm:text-lg font-bold text-[#38bdf8] tracking-wide mb-3">
+                    Tiempo de Estudio
+                </h2>
+
+                <!-- Reloj Digital Grande -->
+                <div id="clock-display" class="font-mono text-4xl sm:text-5xl font-extrabold tracking-widest theme-text my-2 select-none">
+                    25:00
+                </div>
+
+                <!-- Controles del Temporizador -->
+                <div class="flex items-center justify-center gap-3.5 my-4">
+                    <button id="btn-play" type="button" onclick="startPomodoro()" aria-label="Iniciar temporizador" title="Iniciar" class="w-11 h-11 rounded-full bg-[#2563eb] hover:bg-blue-500 active:scale-95 text-white flex items-center justify-center shadow-md shadow-blue-950/30 transition cursor-pointer">
+                        <svg class="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </button>
+                    <button id="btn-pause" type="button" onclick="pausePomodoro()" aria-label="Pausar temporizador" title="Pausar" class="w-11 h-11 rounded-full bg-slate-600 hover:bg-slate-500 active:scale-95 text-white flex items-center justify-center shadow-md transition cursor-pointer">
+                        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    </button>
+                    <button id="btn-reset" type="button" onclick="resetPomodoro()" aria-label="Reiniciar temporizador" title="Reiniciar" class="w-11 h-11 rounded-full bg-[#ef4444] hover:bg-red-500 active:scale-95 text-white flex items-center justify-center shadow-md shadow-red-950/30 transition cursor-pointer">
+                        <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>
+                    </button>
+                </div>
+
+                <!-- Ajustes de Duración -->
+                <div class="w-full grid grid-cols-2 gap-3 mt-1">
+                    <div class="flex flex-col items-center">
+                        <label for="input-study-min" class="text-xs theme-muted mb-1.5 font-medium">Estudio (min)</label>
+                        <input id="input-study-min" type="number" min="1" max="180" value="25" onchange="handleDurationChange()" class="w-full theme-input border focus:border-[#38bdf8] rounded-lg py-2 px-3 text-center text-sm font-semibold focus:outline-none">
+                    </div>
+                    <div class="flex flex-col items-center">
+                        <label for="input-break-min" class="text-xs theme-muted mb-1.5 font-medium">Pausa (min)</label>
+                        <input id="input-break-min" type="number" min="1" max="60" value="5" onchange="handleDurationChange()" class="w-full theme-input border focus:border-[#34d399] rounded-lg py-2 px-3 text-center text-sm font-semibold focus:outline-none">
+                    </div>
+                </div>
+
+                <!-- Caja de Descanso Activo (Ejercicios físicos simples) -->
+                <div id="active-break-box" class="hidden w-full mt-4 bg-emerald-500/15 border border-emerald-500/40 rounded-lg p-3 text-center">
+                    <div class="flex items-center justify-between gap-2 mb-1">
+                        <span class="text-xs font-bold text-emerald-500 uppercase tracking-wider">🧘 Pausa Activa</span>
+                        <button type="button" onclick="nextBreakExercise(true)" class="text-[11px] font-semibold text-emerald-500 hover:underline cursor-pointer">
+                            Otro ejercicio ↻
+                        </button>
+                    </div>
+                    <p id="exercise-suggestion" class="text-xs theme-text leading-relaxed wrap-task-text">
+                        Levántate, estira los brazos hacia el techo durante 15 segundos y haz 10 sentadillas suaves.
+                    </p>
+                </div>
+            </section>
+
+            <!-- Tarjeta Logros / Trofeos -->
+            <section class="theme-card border rounded-xl p-5">
+                <h2 class="text-base sm:text-lg font-bold theme-text flex items-center gap-2 mb-3">
+                    <span>Tus Logros</span>
+                    <span role="img" aria-label="Trofeo">🏆</span>
+                </h2>
+
+                <div class="flex items-center justify-between text-xs sm:text-sm mb-4">
+                    <span class="theme-muted font-medium">Minutos: <strong id="stat-minutes" class="text-[#38bdf8] font-bold">0</strong></span>
+                    <span class="theme-muted font-medium">Pomodoros: <strong id="stat-pomodoros" class="text-[#34d399] font-bold">0</strong></span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2.5">
+                    <div id="badge-1" class="theme-subcard border rounded-lg p-3 flex flex-col items-center justify-center text-center opacity-45 grayscale transition-all duration-300">
+                        <span class="text-xl mb-1">🍅</span>
+                        <span class="text-xs font-medium theme-muted">1 Pomodoro</span>
+                    </div>
+                    <div id="badge-2" class="theme-subcard border rounded-lg p-3 flex flex-col items-center justify-center text-center opacity-45 grayscale transition-all duration-300">
+                        <span class="text-xl mb-1">🔥</span>
+                        <span class="text-xs font-medium theme-muted">Racha x4</span>
+                    </div>
+                    <div id="badge-3" class="theme-subcard border rounded-lg p-3 flex flex-col items-center justify-center text-center opacity-45 grayscale transition-all duration-300">
+                        <span class="text-xl mb-1">⏱️</span>
+                        <span class="text-xs font-medium theme-muted">1 Hora Foco</span>
+                    </div>
+                    <div id="badge-4" class="theme-subcard border rounded-lg p-3 flex flex-col items-center justify-center text-center opacity-45 grayscale transition-all duration-300">
+                        <span class="text-xl mb-1">👑</span>
+                        <span class="text-xs font-medium theme-muted">Maestro</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 3. COLUMNA CENTRAL (Matriz de Tareas - Eisenhower) -->
+        <section class="col-center-desktop min-w-0 overflow-hidden theme-card border rounded-xl p-5 flex flex-col">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-3.5">
+                <h2 class="text-base sm:text-lg font-bold theme-text">Matriz de Tareas</h2>
+                <span class="text-xs theme-muted">Marca para completar · ✕ para borrar</span>
+            </div>
+
+            <!-- Formulario para añadir tareas a Eisenhower -->
+            <form onsubmit="addEisenhowerTask(event)" class="flex flex-col sm:flex-row gap-2 mb-3.5 min-w-0">
+                <input id="eisenhower-input" type="text" placeholder="Nueva tarea..." class="flex-1 min-w-0 theme-input border focus:border-[#38bdf8] rounded-lg px-3 py-2 text-sm placeholder-slate-400 focus:outline-none">
+                <select id="eisenhower-quadrant" class="theme-input border focus:border-[#38bdf8] rounded-lg px-3 py-2 text-sm focus:outline-none cursor-pointer">
+                    <option value="do">Hacer Ya (Urg &amp; Imp)</option>
+                    <option value="plan">Planificar (No Urg &amp; Imp)</option>
+                    <option value="delegate">Delegar (Urg &amp; No Imp)</option>
+                    <option value="eliminate">Eliminar (No Urg &amp; No Imp)</option>
+                </select>
+                <button type="submit" class="bg-[#2563eb] hover:bg-blue-500 active:scale-95 text-white text-sm font-semibold px-4 py-2 rounded-lg transition cursor-pointer shrink-0">
+                    Añadir
+                </button>
+            </form>
+
+            <!-- Barra de progreso de la Matriz de Tareas -->
+            <div class="theme-subcard border rounded-xl p-3 mb-4">
+                <div class="flex items-center justify-between gap-2 text-xs font-semibold mb-1.5">
+                    <span id="eisenhower-progress-label" class="theme-text">Progreso de tareas: 0/0 completadas (0%)</span>
+                    <span id="eisenhower-progress-pct" class="font-mono font-bold text-emerald-500">0%</span>
+                </div>
+                <div class="w-full h-2 bg-slate-500/20 rounded-full overflow-hidden">
+                    <div id="eisenhower-progress-bar" class="h-full bg-gradient-to-r from-[#38bdf8] to-[#34d399] transition-all duration-300 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Cuadrícula 2x2 de Cuadrantes (1 col en <540px) -->
+            <div class="eisenhower-matrix-grid gap-3.5 flex-1 min-w-0">
+                <!-- Hacer Ya -->
+                <div class="min-w-0 overflow-hidden rounded-xl border quad-do p-3.5 flex flex-col min-h-[165px]">
+                    <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-red-500 mb-2.5">
+                        HACER YA (URG &amp; IMP)
+                    </h3>
+                    <ul id="quadrant-do" class="space-y-1.5 flex-1 overflow-y-auto overflow-x-hidden min-w-0"></ul>
+                </div>
+
+                <!-- Planificar -->
+                <div class="min-w-0 overflow-hidden rounded-xl border quad-plan p-3.5 flex flex-col min-h-[165px]">
+                    <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-blue-500 mb-2.5">
+                        PLANIFICAR (NO URG &amp; IMP)
+                    </h3>
+                    <ul id="quadrant-plan" class="space-y-1.5 flex-1 overflow-y-auto overflow-x-hidden min-w-0"></ul>
+                </div>
+
+                <!-- Delegar -->
+                <div class="min-w-0 overflow-hidden rounded-xl border quad-delegate p-3.5 flex flex-col min-h-[165px]">
+                    <h3 class="text-[11px] font-extrabold uppercase tracking-wider text-amber-500 mb-2.5">
+                        DELEGAR (URG &amp; NO IMP)
+                    </h3>
+                    <ul id="quadrant-delegate" class="space-y-1.5 flex-1 overflow-y-auto overflow-x-hidden min-w-0"></ul>
+                </div>
+
+                <!-- Eliminar -->
+                <div class="min-w-0 overflow-hidden rounded-xl border quad-eliminate p-3.5 flex flex-col min-h-[165px]">
+                    <h3 class="text-[11px] font-extrabold uppercase tracking-wider theme-muted mb-2.5">
+                        ELIMINAR (NO URG &amp; NO IMP)
+                    </h3>
+                    <ul id="quadrant-eliminate" class="space-y-1.5 flex-1 overflow-y-auto overflow-x-hidden min-w-0"></ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. COLUMNA DERECHA (Time Blocking Sincronizado + Horario del Día) -->
+        <div class="flex flex-col gap-5 min-w-0">
+
+            <!-- Tarjeta Time Blocking (Pomodoros) -->
+            <section class="theme-card border rounded-xl p-5 min-w-0 overflow-hidden">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <h2 class="text-base sm:text-lg font-bold theme-text">Time Blocking (Pomodoros)</h2>
+                    <span id="tb-total-badge" class="text-[11px] font-mono font-semibold px-2.5 py-0.5 rounded theme-subcard border theme-muted shrink-0">
+                        0 bloques
+                    </span>
+                </div>
+
+                <!-- Apartado para añadir nombre de tarea y duración en minutos -->
+                <form onsubmit="addTimeBlockTask(event)" class="flex flex-col sm:flex-row gap-2 mb-3 min-w-0">
+                    <input id="tb-task-name" type="text" placeholder="Nombre de la tarea..." class="flex-1 min-w-0 theme-input border focus:border-[#38bdf8] rounded-lg px-3 py-2 text-sm placeholder-slate-400 focus:outline-none">
+                    <div class="flex gap-2 shrink-0">
+                        <input id="tb-task-minutes" type="number" min="1" max="480" placeholder="Minutos" class="flex-1 sm:w-24 theme-input border focus:border-[#38bdf8] rounded-lg px-2.5 py-2 text-sm placeholder-slate-400 focus:outline-none">
+                        <button type="submit" class="bg-[#2563eb] hover:bg-blue-500 active:scale-95 text-white text-sm font-semibold px-3.5 py-2 rounded-lg transition cursor-pointer shrink-0">
+                            Añadir
+                        </button>
+                    </div>
+                </form>
+
+                <!-- Barra de progreso de Time Blocking -->
+                <div class="theme-subcard border rounded-xl p-3 mb-3">
+                    <div class="flex flex-wrap items-center justify-between gap-1 text-xs font-semibold mb-1.5">
+                        <span id="tb-progress-label" class="theme-text">0/0 bloques completados (0%)</span>
+                        <span id="tb-minutes-label" class="font-mono text-[11px] text-[#38bdf8]">0/0 min</span>
+                    </div>
+                    <div class="w-full h-2 bg-slate-500/20 rounded-full overflow-hidden">
+                        <div id="tb-progress-bar" class="h-full bg-gradient-to-r from-[#38bdf8] to-[#34d399] transition-all duration-300 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <p class="text-xs theme-muted mb-3">
+                    La primera tarea descuenta su tiempo automáticamente mientras estudias.
+                </p>
+
+                <!-- Lista visual de tareas en cola -->
+                <div id="tb-queue-list" class="space-y-2.5 max-h-60 overflow-y-auto overflow-x-hidden pr-1 min-w-0">
+                    <!-- Renderizado dinámicamente -->
+                </div>
+
+                <!-- Lista opcional de bloques completados en la sesión -->
+                <div id="tb-completed-wrapper" class="hidden mt-3.5 pt-3 border-t theme-border">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-500">
+                            Completados (<span id="tb-completed-count">0</span>)
+                        </span>
+                        <button type="button" onclick="clearCompletedTimeBlocks()" class="text-[11px] font-semibold theme-muted hover:text-[#ef4444] transition cursor-pointer">
+                            Limpiar completadas
+                        </button>
+                    </div>
+                    <ul id="tb-completed-list" class="space-y-1.5 max-h-32 overflow-y-auto overflow-x-hidden pr-1"></ul>
+                </div>
+            </section>
+
+            <!-- Tarjeta Horario del Día con Alarmas en Tiempo Real -->
+            <section class="theme-card border rounded-xl p-5 flex-1 flex flex-col min-w-0 overflow-hidden">
+                <div class="flex items-center justify-between gap-2 mb-3">
+                    <h2 class="text-base sm:text-lg font-bold theme-text">Horario del Día</h2>
+                    <span id="schedule-live-clock" class="font-mono text-xs font-bold px-2.5 py-1 rounded-lg theme-subcard border text-[#38bdf8] shrink-0">
+                        🕒 00:00:00
+                    </span>
+                </div>
+
+                <!-- Banner de Alarma Activa cuando llega la hora de una actividad -->
+                <div id="schedule-alarm-banner" class="hidden mb-3 rounded-xl border-2 border-amber-500 bg-amber-500/15 p-3 flex items-start justify-between gap-2.5">
+                    <div class="flex items-start gap-2 min-w-0">
+                        <span class="text-lg shrink-0 animate-bounce">⏰</span>
+                        <div class="min-w-0">
+                            <p class="text-[11px] font-extrabold uppercase tracking-wider text-amber-500">
+                                ¡Hora de empezar actividad!
+                            </p>
+                            <p id="schedule-alarm-text" class="text-xs sm:text-sm font-bold theme-text wrap-task-text">
+                                Actividad programada
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="dismissScheduleAlarmBanner()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-2.5 py-1.5 rounded-lg transition cursor-pointer shrink-0">
+                        Entendido
+                    </button>
+                </div>
+
+                <form onsubmit="addScheduleEvent(event)" class="flex items-center gap-2 mb-3.5 min-w-0">
+                    <input id="schedule-time" type="time" value="09:00" required class="theme-input border focus:border-[#38bdf8] rounded-lg px-2.5 py-2 text-sm font-mono focus:outline-none shrink-0">
+                    <input id="schedule-text" type="text" placeholder="Evento o asignatura..." class="flex-1 min-w-0 theme-input border focus:border-[#38bdf8] rounded-lg px-3 py-2 text-sm placeholder-slate-400 focus:outline-none">
+                    <button type="submit" aria-label="Añadir evento al horario" class="bg-[#10b981] hover:bg-emerald-400 active:scale-95 text-slate-950 font-extrabold text-base w-10 h-10 rounded-lg flex items-center justify-center transition cursor-pointer shrink-0">
+                        +
+                    </button>
+                </form>
+
+                <ul id="schedule-list" class="space-y-2 flex-1 overflow-y-auto overflow-x-hidden max-h-60 pr-1 min-w-0">
+                    <!-- Eventos renderizados dinámicamente -->
+                </ul>
+            </section>
+        </div>
+    </main>
+
+    <!-- 5. LECTOR DE PDFs FUNCIONAL INTEGRADO (VISOR DE APUNTES) -->
+    <section id="pdf-reader-section" class="w-full max-w-[1440px] mx-auto theme-card border rounded-xl p-4 sm:p-5 min-w-0 overflow-hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-3.5">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <h2 class="text-base sm:text-lg font-bold theme-text shrink-0">📖 Lector de PDFs (Apuntes de Estudio)</h2>
+                <span id="pdf-doc-name" class="hidden text-xs font-semibold px-2.5 py-1 rounded-lg theme-subcard border text-[#38bdf8] truncate max-w-[200px] sm:max-w-xs">
+                    documento.pdf
+                </span>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+                <input id="pdf-file-input" type="file" accept="application/pdf,.pdf" onchange="handlePdfFileSelect(event)" class="hidden">
+                <button type="button" onclick="triggerPdfFilePicker()" class="bg-[#2563eb] hover:bg-blue-500 active:scale-95 text-white text-xs sm:text-sm font-semibold px-3.5 py-2 rounded-lg shadow-sm transition flex items-center gap-1.5 cursor-pointer">
+                    <span>📂</span>
+                    <span>Abrir PDF</span>
+                </button>
+                <button id="pdf-close-btn" type="button" onclick="closePdfDocument()" class="hidden theme-subcard border theme-muted hover:text-[#ef4444] hover:border-red-400/50 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition cursor-pointer">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+
+        <!-- Barra de herramientas del lector PDF (Visible al abrir un documento) -->
+        <div id="pdf-toolbar" class="hidden theme-subcard border rounded-xl p-2.5 mb-3.5 flex flex-wrap items-center justify-between gap-2.5">
+            <!-- Navegación de páginas -->
+            <div class="flex items-center gap-1.5 sm:gap-2">
+                <button id="pdf-prev-btn" type="button" onclick="prevPdfPage()" class="theme-card border theme-text hover:border-[#38bdf8] disabled:opacity-40 disabled:pointer-events-none text-xs sm:text-sm font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg transition cursor-pointer">
+                    ◀ Anterior
+                </button>
+                <div class="flex items-center gap-1.5 text-xs sm:text-sm font-medium theme-text px-1">
+                    <span>Página</span>
+                    <input id="pdf-page-input" type="number" min="1" value="1" onchange="jumpToPdfPage(this.value)" aria-label="Número de página" class="w-14 sm:w-16 theme-input border focus:border-[#38bdf8] rounded-md px-1.5 py-1 text-center font-mono text-xs sm:text-sm font-bold focus:outline-none">
+                    <span>de <strong id="pdf-page-count" class="font-mono text-[#38bdf8]">1</strong></span>
+                </div>
+                <button id="pdf-next-btn" type="button" onclick="nextPdfPage()" class="theme-card border theme-text hover:border-[#38bdf8] disabled:opacity-40 disabled:pointer-events-none text-xs sm:text-sm font-semibold px-2.5 sm:px-3 py-1.5 rounded-lg transition cursor-pointer">
+                    Siguiente ▶
+                </button>
+            </div>
+
+            <!-- Controles de zoom y expansión -->
+            <div id="pdf-zoom-controls" class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                <button type="button" onclick="zoomOutPdf()" title="Alejar" aria-label="Alejar zoom" class="theme-card border theme-text hover:border-[#38bdf8] text-xs sm:text-sm font-bold w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer">
+                    −
+                </button>
+                <span id="pdf-zoom-level" class="font-mono text-xs sm:text-sm font-bold theme-text min-w-[46px] text-center select-none">
+                    100%
+                </span>
+                <button type="button" onclick="zoomInPdf()" title="Acercar" aria-label="Acercar zoom" class="theme-card border theme-text hover:border-[#38bdf8] text-xs sm:text-sm font-bold w-8 h-8 rounded-lg flex items-center justify-center transition cursor-pointer">
+                    +
+                </button>
+                <button type="button" onclick="fitWidthPdf()" class="theme-card border theme-text hover:border-[#38bdf8] text-xs font-semibold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                    Ajustar ancho
+                </button>
+                <button id="pdf-expand-btn" type="button" onclick="togglePdfExpand()" class="theme-card border text-emerald-500 hover:border-emerald-400 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition cursor-pointer">
+                    ⛶ Expandir
+                </button>
+            </div>
+        </div>
+
+        <!-- Zona Drag & Drop inicial -->
+        <div id="pdf-dropzone" onclick="triggerPdfFilePicker()" class="theme-subcard border-2 border-dashed theme-border hover:border-[#38bdf8]/70 rounded-xl p-6 sm:p-10 text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-2.5">
+            <div class="w-12 h-12 rounded-2xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center text-2xl">
+                📄
+            </div>
+            <p class="text-sm sm:text-base font-bold theme-text">
+                Arrastra y suelta aquí tus apuntes en PDF, o haz clic para seleccionar un archivo
+            </p>
+            <p class="text-xs theme-muted max-w-lg">
+                Visualiza libros, temas y ejercicios sin salir de tu sesión Pomodoro. Recordaremos automáticamente la última página que leíste de cada documento.
+            </p>
+            <div id="pdf-last-read-hint" class="hidden mt-1 text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/35 text-emerald-500 wrap-task-text">
+                Último PDF leído: apuntes.pdf (Página 1)
+            </div>
+        </div>
+
+        <!-- Contenedor del visor de páginas (Canvas PDF.js + Fallback Iframe) -->
+        <div id="pdf-viewer-wrapper" class="hidden theme-subcard border rounded-xl overflow-auto h-[460px] sm:h-[600px] p-3 sm:p-5 relative transition-all">
+            <div id="pdf-loading-spinner" class="hidden absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center z-10">
+                <span class="theme-card border px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold theme-text shadow-lg">
+                    Renderizando página...
+                </span>
+            </div>
+            <div id="pdf-canvas-container" class="min-w-full flex justify-center items-start">
+                <canvas id="pdf-render-canvas" class="rounded shadow-xl bg-white max-w-none"></canvas>
+            </div>
+            <iframe id="pdf-fallback-iframe" title="Visor PDF alternativo" class="hidden w-full h-full min-h-[440px] rounded-lg border-0 bg-white"></iframe>
+        </div>
+    </section>
+
+    <script>
+        /* =====================================================================
+           1. ESTADO GLOBAL DE LA APLICACIÓN Y PERSISTENCIA (pomoflow_state_v2)
+           ===================================================================== */
+        const STATE_STORAGE_KEY = 'pomoflow_state_v2';
+        const LEGACY_STORAGE_KEYS = {
+            theme: 'pomoflow_theme',
+            schedule: 'pomoflow_schedule',
+            stats: 'pomoflow_stats'
+        };
+
+        // Configurar worker de PDF.js si la librería cargó correctamente
+        try {
+            if (window.pdfjsLib) {
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            }
+        } catch (err) {
+            console.warn('No se pudo configurar el worker de PDF.js:', err);
+        }
+
+        const activeBreakExercises = [
+            'Levántate, estira los brazos hacia el techo durante 15 segundos y haz 10 sentadillas suaves.',
+            'Gira lentamente el cuello hacia ambos lados (5 repeticiones) y relaja los hombros hacia atrás.',
+            'Camina por la habitación durante 2 minutos y bebe un vaso grande de agua para hidratarte.',
+            'Haz 10 flexiones contra la pared o el escritorio y estira las muñecas suavemente.',
+            'Aplica la regla 20-20-20: mira un punto lejano a más de 6 metros durante 20 segundos.'
+        ];
+
+        const state = {
+            theme: 'dark',
+            mode: 'study', // 'study' | 'break'
+            isRunning: false,
+            studyDurationMin: 25,
+            breakDurationMin: 5,
+            secondsLeft: 25 * 60,
+            intervalId: null,
+
+            // Estadísticas y logros
+            totalStudySeconds: 0,
+            completedPomodoros: 0,
+            unlockedBadges: new Set(),
+            currentExerciseIdx: 0,
+
+            // Matriz de Eisenhower: [{ id, text, quadrant, completed }]
+            eisenhowerTasks: [],
+
+            // Cola de Time Blocking: [{ id, name, totalSeconds, remainingSeconds }]
+            timeBlocks: [],
+            // Bloques completados en la sesión: [{ id, name, totalSeconds }]
+            completedTimeBlocks: [],
+
+            // Horario del día: [{ id, time, text, triggeredDateKey }]
+            scheduleEvents: [],
+            lastCheckedMinuteKey: '',
+
+            // Audio ambiental Web Audio API
+            audioCtx: null,
+            isMusicPlaying: false,
+            selectedSound: 'alfa',
+            musicVolume: 65, // 0..100
+            previousVolume: 65,
+            ambientNodes: null,
+
+            // Estado del Lector de PDFs
+            pdfDoc: null,
+            pdfFileName: '',
+            pdfCurrentPage: 1,
+            pdfTotalPages: 0,
+            pdfScale: 1.0,
+            pdfFitWidth: true,
+            pdfIsExpanded: false,
+            pdfUsingFallback: false,
+            pdfObjectUrl: null,
+            pdfRenderTask: null,
+            pdfLastPages: {}, // { [fileName]: pageNumber }
+            lastPdfMeta: null  // { name, page }
+        };
+
+        let saveIndicatorTimer = null;
+        let toastTimer = null;
+
+        function saveAppState() {
+            try {
+                const payload = {
+                    theme: state.theme,
+                    mode: state.mode,
+                    studyDurationMin: state.studyDurationMin,
+                    breakDurationMin: state.breakDurationMin,
+                    secondsLeft: state.secondsLeft,
+                    totalStudySeconds: state.totalStudySeconds,
+                    completedPomodoros: state.completedPomodoros,
+                    unlockedBadges: Array.from(state.unlockedBadges),
+                    currentExerciseIdx: state.currentExerciseIdx,
+                    eisenhowerTasks: state.eisenhowerTasks,
+                    timeBlocks: state.timeBlocks,
+                    completedTimeBlocks: state.completedTimeBlocks,
+                    scheduleEvents: state.scheduleEvents,
+                    selectedSound: state.selectedSound,
+                    musicVolume: state.musicVolume,
+                    pdfLastPages: state.pdfLastPages,
+                    lastPdfMeta: state.lastPdfMeta
+                };
+                localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(payload));
+                localStorage.setItem(LEGACY_STORAGE_KEYS.theme, state.theme);
+                flashSaveIndicator();
+            } catch (e) {
+                console.warn('No se pudo guardar en localStorage:', e);
+            }
+        }
+
+        function flashSaveIndicator() {
+            const textEl = document.getElementById('save-status-text');
+            if (!textEl) return;
+            textEl.textContent = 'Guardando...';
+            if (saveIndicatorTimer) clearTimeout(saveIndicatorTimer);
+            saveIndicatorTimer = setTimeout(() => {
+                textEl.textContent = 'Guardado';
+            }, 550);
+        }
+
+        function loadPersistedData() {
+            try {
+                const raw = localStorage.getItem(STATE_STORAGE_KEY);
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    if (data && typeof data === 'object') {
+                        if (data.theme === 'light' || data.theme === 'dark') state.theme = data.theme;
+                        if (data.mode === 'study' || data.mode === 'break') state.mode = data.mode;
+                        if (Number.isFinite(data.studyDurationMin) && data.studyDurationMin >= 1) {
+                            state.studyDurationMin = data.studyDurationMin;
+                        }
+                        if (Number.isFinite(data.breakDurationMin) && data.breakDurationMin >= 1) {
+                            state.breakDurationMin = data.breakDurationMin;
+                        }
+                        if (Number.isFinite(data.secondsLeft) && data.secondsLeft > 0) {
+                            state.secondsLeft = data.secondsLeft;
+                        } else {
+                            state.secondsLeft = (state.mode === 'study' ? state.studyDurationMin : state.breakDurationMin) * 60;
+                        }
+                        if (Number.isFinite(data.totalStudySeconds)) state.totalStudySeconds = data.totalStudySeconds;
+                        if (Number.isFinite(data.completedPomodoros)) state.completedPomodoros = data.completedPomodoros;
+                        if (Array.isArray(data.unlockedBadges)) state.unlockedBadges = new Set(data.unlockedBadges);
+                        if (Number.isFinite(data.currentExerciseIdx)) {
+                            state.currentExerciseIdx = data.currentExerciseIdx % activeBreakExercises.length;
+                        }
+                        if (Array.isArray(data.eisenhowerTasks)) state.eisenhowerTasks = data.eisenhowerTasks;
+                        if (Array.isArray(data.timeBlocks)) state.timeBlocks = data.timeBlocks;
+                        if (Array.isArray(data.completedTimeBlocks)) state.completedTimeBlocks = data.completedTimeBlocks;
+                        if (Array.isArray(data.scheduleEvents)) state.scheduleEvents = data.scheduleEvents;
+                        if (typeof data.selectedSound === 'string') state.selectedSound = data.selectedSound;
+                        if (Number.isFinite(data.musicVolume)) {
+                            state.musicVolume = Math.max(0, Math.min(100, data.musicVolume));
+                            if (state.musicVolume > 0) state.previousVolume = state.musicVolume;
+                        }
+                        if (data.pdfLastPages && typeof data.pdfLastPages === 'object') {
+                            state.pdfLastPages = data.pdfLastPages;
+                        }
+                        if (data.lastPdfMeta && typeof data.lastPdfMeta === 'object') {
+                            state.lastPdfMeta = data.lastPdfMeta;
+                        }
+                    }
+                } else {
+                    const legacyTheme = localStorage.getItem(LEGACY_STORAGE_KEYS.theme);
+                    if (legacyTheme === 'light' || legacyTheme === 'dark') {
+                        state.theme = legacyTheme;
+                    }
+                }
+            } catch (e) {
+                console.warn('Error al leer datos guardados:', e);
+            }
+
+            // Sincronizar controles del DOM con el estado cargado
+            applyThemeUI();
+            const studyInput = document.getElementById('input-study-min');
+            const breakInput = document.getElementById('input-break-min');
+            const soundSelect = document.getElementById('sound-selector');
+            const volSlider = document.getElementById('music-volume');
+            const suggestionEl = document.getElementById('exercise-suggestion');
+
+            if (studyInput) studyInput.value = state.studyDurationMin;
+            if (breakInput) breakInput.value = state.breakDurationMin;
+            if (soundSelect) soundSelect.value = state.selectedSound;
+            if (volSlider) volSlider.value = state.musicVolume;
+            updateVolumeDisplayUI(state.musicVolume);
+            if (suggestionEl) suggestionEl.textContent = activeBreakExercises[state.currentExerciseIdx];
+            updatePdfLastReadHint();
+        }
+
+        /* =====================================================================
+           2. TEMA CLARO / OSCURO, NOTIFICACIONES Y MODAL DE REINICIO
+           ===================================================================== */
+        function applyThemeUI() {
+            document.documentElement.setAttribute('data-theme', state.theme);
+            const labels = document.querySelectorAll('.theme-toggle-label');
+            labels.forEach((el) => {
+                el.textContent = state.theme === 'dark' ? '☀️ Claro' : '🌙 Oscuro';
+            });
+        }
+
+        function toggleTheme() {
+            state.theme = state.theme === 'dark' ? 'light' : 'dark';
+            applyThemeUI();
+            saveAppState();
+        }
+
+        function showNotification(title, message, variant = 'success') {
+            const toast = document.getElementById('toast-notification');
+            const iconEl = document.getElementById('toast-icon');
+            const titleEl = document.getElementById('toast-title');
+            const msgEl = document.getElementById('toast-message');
+            if (!toast || !titleEl || !msgEl) return;
+
+            titleEl.textContent = title;
+            msgEl.textContent = message;
+
+            toast.classList.remove('border-[#34d399]', 'border-amber-500', 'border-[#38bdf8]');
+            titleEl.classList.remove('text-emerald-500', 'text-amber-500', 'text-[#38bdf8]');
+
+            if (variant === 'alarm') {
+                toast.classList.add('border-amber-500');
+                titleEl.classList.add('text-amber-500');
+                if (iconEl) iconEl.textContent = '⏰';
+            } else if (variant === 'info') {
+                toast.classList.add('border-[#38bdf8]');
+                titleEl.classList.add('text-[#38bdf8]');
+                if (iconEl) iconEl.textContent = 'ℹ️';
+            } else {
+                toast.classList.add('border-[#34d399]');
+                titleEl.classList.add('text-emerald-500');
+                if (iconEl) iconEl.textContent = '✅';
+            }
+
+            toast.classList.remove('hidden', 'notification-enter');
+            void toast.offsetWidth;
+            toast.classList.add('notification-enter');
+
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                hideNotification();
+            }, 6000);
+        }
+
+        function hideNotification() {
+            const toast = document.getElementById('toast-notification');
+            if (toast) toast.classList.add('hidden');
+        }
+
+        function openResetModal() {
+            const modal = document.getElementById('reset-confirm-modal');
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeResetModal() {
+            const modal = document.getElementById('reset-confirm-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function confirmResetAllData() {
+            pausePomodoro();
+            if (state.isMusicPlaying) {
+                toggleAmbientMusic();
+            }
+
+            localStorage.removeItem(STATE_STORAGE_KEY);
+            localStorage.removeItem(LEGACY_STORAGE_KEYS.schedule);
+            localStorage.removeItem(LEGACY_STORAGE_KEYS.stats);
+
+            state.mode = 'study';
+            state.studyDurationMin = 25;
+            state.breakDurationMin = 5;
+            state.secondsLeft = 25 * 60;
+            state.totalStudySeconds = 0;
+            state.completedPomodoros = 0;
+            state.unlockedBadges = new Set();
+            state.currentExerciseIdx = 0;
+            state.eisenhowerTasks = [];
+            state.timeBlocks = [];
+            state.completedTimeBlocks = [];
+            state.scheduleEvents = [];
+            state.pdfLastPages = {};
+            state.lastPdfMeta = null;
+
+            const studyInput = document.getElementById('input-study-min');
+            const breakInput = document.getElementById('input-break-min');
+            if (studyInput) studyInput.value = 25;
+            if (breakInput) breakInput.value = 5;
+
+            dismissScheduleAlarmBanner();
+            updateTimerUI();
+            updateAchievementsUI(false);
+            renderEisenhowerMatrix();
+            renderTimeBlockingQueue();
+            renderScheduleList();
+            updatePdfLastReadHint();
+            saveAppState();
+            closeResetModal();
+            showNotification('Datos reiniciados', 'Se han restablecido todas tus listas, estadísticas y marcadores.', 'info');
+        }
+
+        /* =====================================================================
+           3. TEMPORIZADOR POMODORO Y PAUSAS ACTIVAS
+           ===================================================================== */
+        function formatClock(totalSeconds) {
+            const safeSec = Math.max(0, Math.floor(totalSeconds));
+            const mins = Math.floor(safeSec / 60);
+            const secs = safeSec % 60;
+            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        }
+
+        function updateTimerUI() {
+            const clockEl = document.getElementById('clock-display');
+            const titleEl = document.getElementById('timer-status-title');
+            const cardEl = document.getElementById('pomodoro-card');
+            const breakBox = document.getElementById('active-break-box');
+
+            const formatted = formatClock(state.secondsLeft);
+            if (clockEl) clockEl.textContent = formatted;
+
+            const modeLabel = state.mode === 'study' ? 'Estudio' : 'Pausa Activa';
+            document.title = `${formatted} (${modeLabel}) - PomoFlow Dashboard`;
+
+            if (state.mode === 'study') {
+                if (titleEl) {
+                    titleEl.textContent = 'Tiempo de Estudio';
+                    titleEl.classList.remove('text-[#34d399]');
+                    titleEl.classList.add('text-[#38bdf8]');
+                }
+                if (cardEl) {
+                    cardEl.classList.remove('border-t-[#34d399]');
+                    cardEl.classList.add('border-t-[#38bdf8]');
+                }
+                if (breakBox) breakBox.classList.add('hidden');
+            } else {
+                if (titleEl) {
+                    titleEl.textContent = 'Descanso Activo';
+                    titleEl.classList.remove('text-[#38bdf8]');
+                    titleEl.classList.add('text-[#34d399]');
+                }
+                if (cardEl) {
+                    cardEl.classList.remove('border-t-[#38bdf8]');
+                    cardEl.classList.add('border-t-[#34d399]');
+                }
+                if (breakBox) breakBox.classList.remove('hidden');
+            }
+        }
+
+        function startPomodoro() {
+            if (state.isRunning) return;
+            state.isRunning = true;
+            state.intervalId = setInterval(tickPomodoro, 1000);
+            renderTimeBlockingQueue();
+        }
+
+        function pausePomodoro() {
+            state.isRunning = false;
+            if (state.intervalId) {
+                clearInterval(state.intervalId);
+                state.intervalId = null;
+            }
+            renderTimeBlockingQueue();
+            saveAppState();
+        }
+
+        function resetPomodoro() {
+            pausePomodoro();
+            state.mode = 'study';
+            state.secondsLeft = state.studyDurationMin * 60;
+            updateTimerUI();
+            renderTimeBlockingQueue();
+            saveAppState();
+        }
+
+        function handleDurationChange() {
+            const studyInput = document.getElementById('input-study-min');
+            const breakInput = document.getElementById('input-break-min');
+
+            const newStudy = Math.max(1, Math.min(180, parseInt(studyInput.value, 10) || 25));
+            const newBreak = Math.max(1, Math.min(60, parseInt(breakInput.value, 10) || 5));
+
+            studyInput.value = newStudy;
+            breakInput.value = newBreak;
+            state.studyDurationMin = newStudy;
+            state.breakDurationMin = newBreak;
+
+            if (!state.isRunning) {
+                state.secondsLeft = (state.mode === 'study' ? newStudy : newBreak) * 60;
+                updateTimerUI();
+            }
+            saveAppState();
+        }
+
+        function nextBreakExercise(save = false) {
+            state.currentExerciseIdx = (state.currentExerciseIdx + 1) % activeBreakExercises.length;
+            const suggestionEl = document.getElementById('exercise-suggestion');
+            if (suggestionEl) {
+                suggestionEl.textContent = activeBreakExercises[state.currentExerciseIdx];
+            }
+            if (save) saveAppState();
+        }
+
+        function tickPomodoro() {
+            if (state.secondsLeft > 0) {
+                state.secondsLeft--;
+
+                if (state.mode === 'study') {
+                    state.totalStudySeconds++;
+
+                    // Sincronizar con la primera tarea en cola de Time Blocking
+                    if (state.timeBlocks.length > 0) {
+                        state.timeBlocks[0].remainingSeconds = Math.max(0, state.timeBlocks[0].remainingSeconds - 1);
+                        if (state.timeBlocks[0].remainingSeconds <= 0) {
+                            const finished = state.timeBlocks.shift();
+                            state.completedTimeBlocks.unshift({
+                                id: finished.id,
+                                name: finished.name,
+                                totalSeconds: finished.totalSeconds
+                            });
+                            playGentleChime('task');
+                            showNotification(
+                                '¡Tarea completada!',
+                                `Has terminado con: ${finished.name}`,
+                                'success'
+                            );
+                        }
+                        renderTimeBlockingQueue();
+                    }
+
+                    // Actualizar logros cada 15 segundos o al completar un minuto
+                    if (state.totalStudySeconds % 15 === 0) {
+                        updateAchievementsUI(true);
+                        saveAppState();
+                    }
+                }
+
+                updateTimerUI();
+            } else {
+                completeCurrentPhase();
+            }
+        }
+
+        function completeCurrentPhase() {
+            playGentleChime('phase');
+
+            if (state.mode === 'study') {
+                state.completedPomodoros++;
+                updateAchievementsUI(true);
+                state.mode = 'break';
+                state.secondsLeft = state.breakDurationMin * 60;
+                nextBreakExercise(false);
+                showNotification(
+                    '¡Pomodoro completado!',
+                    `Excelente trabajo. Tómate ${state.breakDurationMin} min de descanso activo.`,
+                    'success'
+                );
+            } else {
+                state.mode = 'study';
+                state.secondsLeft = state.studyDurationMin * 60;
+                showNotification(
+                    'Fin del descanso',
+                    `Volvemos al estudio durante ${state.studyDurationMin} minutos.`,
+                    'info'
+                );
+            }
+
+            updateTimerUI();
+            renderTimeBlockingQueue();
+            saveAppState();
+        }
+
+        /* =====================================================================
+           4. SISTEMA DE LOGROS Y ESTADÍSTICAS
+           ===================================================================== */
+        function updateAchievementsUI(notifyNew = false) {
+            const totalMinutes = Math.floor(state.totalStudySeconds / 60);
+            const minEl = document.getElementById('stat-minutes');
+            const pomoEl = document.getElementById('stat-pomodoros');
+
+            if (minEl) minEl.textContent = totalMinutes;
+            if (pomoEl) pomoEl.textContent = state.completedPomodoros;
+
+            const badgesConfig = [
+                { id: 'badge-1', label: '1 Pomodoro', unlocked: state.completedPomodoros >= 1 },
+                { id: 'badge-2', label: 'Racha x4', unlocked: state.completedPomodoros >= 4 },
+                { id: 'badge-3', label: '1 Hora Foco', unlocked: totalMinutes >= 60 },
+                { id: 'badge-4', label: 'Maestro', unlocked: state.completedPomodoros >= 10 || totalMinutes >= 180 }
+            ];
+
+            badgesConfig.forEach((b) => {
+                const el = document.getElementById(b.id);
+                if (!el) return;
+                if (b.unlocked) {
+                    el.classList.remove('opacity-45', 'grayscale');
+                    el.classList.add('border-[#34d399]/60', 'shadow-md');
+                    if (!state.unlockedBadges.has(b.id)) {
+                        state.unlockedBadges.add(b.id);
+                        if (notifyNew) {
+                            showNotification('¡Nuevo logro desbloqueado!', `Insignia conseguida: ${b.label}`, 'success');
+                        }
+                    }
+                } else {
+                    el.classList.add('opacity-45', 'grayscale');
+                    el.classList.remove('border-[#34d399]/60', 'shadow-md');
+                }
+            });
+        }
+
+        /* =====================================================================
+           5. MATRIZ DE TAREAS (EISENHOWER) CON BARRA DE PROGRESO
+           ===================================================================== */
+        function addEisenhowerTask(event) {
+            event.preventDefault();
+            const input = document.getElementById('eisenhower-input');
+            const quadrantSelect = document.getElementById('eisenhower-quadrant');
+            const text = input.value.trim();
+            if (!text) return;
+
+            state.eisenhowerTasks.push({
+                id: 'eis_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                text,
+                quadrant: quadrantSelect.value || 'do',
+                completed: false
+            });
+
+            input.value = '';
+            renderEisenhowerMatrix();
+            saveAppState();
+        }
+
+        function toggleEisenhowerTask(id) {
+            const task = state.eisenhowerTasks.find((t) => t.id === id);
+            if (!task) return;
+            task.completed = !task.completed;
+            renderEisenhowerMatrix();
+            saveAppState();
+        }
+
+        function deleteEisenhowerTask(id) {
+            state.eisenhowerTasks = state.eisenhowerTasks.filter((t) => t.id !== id);
+            renderEisenhowerMatrix();
+            saveAppState();
+        }
+
+        function renderEisenhowerMatrix() {
+            const lists = {
+                do: document.getElementById('quadrant-do'),
+                plan: document.getElementById('quadrant-plan'),
+                delegate: document.getElementById('quadrant-delegate'),
+                eliminate: document.getElementById('quadrant-eliminate')
+            };
+
+            Object.values(lists).forEach((ul) => {
+                if (ul) ul.innerHTML = '';
+            });
+
+            state.eisenhowerTasks.forEach((task) => {
+                const targetUl = lists[task.quadrant] || lists.do;
+                if (!targetUl) return;
+
+                const li = document.createElement('li');
+                li.className = 'theme-subcard border rounded-lg px-2.5 py-2 flex items-start gap-2 min-w-0 transition';
+                li.innerHTML = `
+                    <input type="checkbox" ${task.completed ? 'checked' : ''} onchange="toggleEisenhowerTask('${task.id}')" aria-label="Completar tarea" class="mt-0.5 rounded accent-emerald-500 cursor-pointer shrink-0">
+                    <span onclick="toggleEisenhowerTask('${task.id}')" class="flex-1 min-w-0 text-xs font-medium theme-text wrap-task-text cursor-pointer ${task.completed ? 'line-through opacity-55' : ''}">${escapeHTML(task.text)}</span>
+                    <button type="button" onclick="deleteEisenhowerTask('${task.id}')" aria-label="Eliminar tarea" class="theme-muted hover:text-[#ef4444] text-xs font-bold px-1 rounded transition cursor-pointer shrink-0">✕</button>
+                `;
+                targetUl.appendChild(li);
+            });
+
+            // Actualizar barra de progreso
+            const total = state.eisenhowerTasks.length;
+            const completed = state.eisenhowerTasks.filter((t) => t.completed).length;
+            const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+            const labelEl = document.getElementById('eisenhower-progress-label');
+            const pctEl = document.getElementById('eisenhower-progress-pct');
+            const barEl = document.getElementById('eisenhower-progress-bar');
+
+            if (labelEl) labelEl.textContent = `Progreso de tareas: ${completed}/${total} completadas (${pct}%)`;
+            if (pctEl) pctEl.textContent = `${pct}%`;
+            if (barEl) barEl.style.width = `${pct}%`;
+        }
+
+        /* =====================================================================
+           6. TIME BLOCKING (POMODOROS) SINCRONIZADO Y PROGRESO
+           ===================================================================== */
+        function addTimeBlockTask(event) {
+            event.preventDefault();
+            const nameInput = document.getElementById('tb-task-name');
+            const minInput = document.getElementById('tb-task-minutes');
+
+            const name = nameInput.value.trim();
+            const minutes = parseInt(minInput.value, 10);
+
+            if (!name || !Number.isFinite(minutes) || minutes < 1) return;
+
+            const totalSeconds = Math.min(480, minutes) * 60;
+            state.timeBlocks.push({
+                id: 'tb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                name,
+                totalSeconds,
+                remainingSeconds: totalSeconds
+            });
+
+            nameInput.value = '';
+            minInput.value = '';
+            renderTimeBlockingQueue();
+            saveAppState();
+        }
+
+        function completeTimeBlockTask(id) {
+            const idx = state.timeBlocks.findIndex((b) => b.id === id);
+            if (idx === -1) return;
+            const [finished] = state.timeBlocks.splice(idx, 1);
+            state.completedTimeBlocks.unshift({
+                id: finished.id,
+                name: finished.name,
+                totalSeconds: finished.totalSeconds
+            });
+            playGentleChime('task');
+            showNotification('¡Tarea completada!', `Has terminado con: ${finished.name}`, 'success');
+            renderTimeBlockingQueue();
+            saveAppState();
+        }
+
+        function deleteTimeBlockTask(id) {
+            state.timeBlocks = state.timeBlocks.filter((b) => b.id !== id);
+            renderTimeBlockingQueue();
+            saveAppState();
+        }
+
+        function clearCompletedTimeBlocks() {
+            state.completedTimeBlocks = [];
+            renderTimeBlockingQueue();
+            saveAppState();
+        }
+
+        function renderTimeBlockingQueue() {
+            const queueEl = document.getElementById('tb-queue-list');
+            const badgeEl = document.getElementById('tb-total-badge');
+            const progLabelEl = document.getElementById('tb-progress-label');
+            const minLabelEl = document.getElementById('tb-minutes-label');
+            const progBarEl = document.getElementById('tb-progress-bar');
+            const compWrapperEl = document.getElementById('tb-completed-wrapper');
+            const compCountEl = document.getElementById('tb-completed-count');
+            const compListEl = document.getElementById('tb-completed-list');
+
+            const pendingCount = state.timeBlocks.length;
+            const completedCount = state.completedTimeBlocks.length;
+            const totalBlocks = pendingCount + completedCount;
+
+            if (badgeEl) {
+                badgeEl.textContent = `${pendingCount} bloque${pendingCount === 1 ? '' : 's'}`;
+            }
+
+            // Calcular minutos realizados vs totales
+            const completedSecs = state.completedTimeBlocks.reduce((acc, b) => acc + b.totalSeconds, 0);
+            const activeElapsedSecs = state.timeBlocks.reduce((acc, b) => acc + Math.max(0, b.totalSeconds - b.remainingSeconds), 0);
+            const totalAllSecs = completedSecs + state.timeBlocks.reduce((acc, b) => acc + b.totalSeconds, 0);
+
+            const doneMin = Math.floor((completedSecs + activeElapsedSecs) / 60);
+            const totalMin = Math.floor(totalAllSecs / 60);
+            const pct = totalBlocks > 0 ? Math.round((completedCount / totalBlocks) * 100) : 0;
+
+            if (progLabelEl) progLabelEl.textContent = `${completedCount}/${totalBlocks} bloques completados (${pct}%)`;
+            if (minLabelEl) minLabelEl.textContent = `${doneMin}/${totalMin} min`;
+            if (progBarEl) progBarEl.style.width = `${pct}%`;
+
+            if (queueEl) {
+                if (pendingCount === 0) {
+                    queueEl.innerHTML = `
+                        <div class="theme-subcard border border-dashed rounded-xl p-4 text-center text-xs theme-muted">
+                            No hay tareas en cola. Añade una tarea con su duración para sincronizarla con el temporizador.
+                        </div>
+                    `;
+                } else {
+                    queueEl.innerHTML = state.timeBlocks.map((block, index) => {
+                        const isFirst = index === 0;
+                        const isActivelyCounting = isFirst && state.isRunning && state.mode === 'study';
+                        const elapsedPct = block.totalSeconds > 0
+                            ? Math.min(100, Math.round(((block.totalSeconds - block.remainingSeconds) / block.totalSeconds) * 100))
+                            : 0;
+
+                        return `
+                            <div class="theme-subcard border ${isFirst ? 'border-[#38bdf8]/70' : ''} rounded-xl p-3 flex flex-col gap-2 min-w-0 transition">
+                                <div class="flex items-start justify-between gap-2 min-w-0">
+                                    <div class="min-w-0 flex-1">
+                                        <div class="flex items-center gap-1.5 mb-0.5">
+                                            <span class="text-[10px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded ${isActivelyCounting ? 'bg-sky-500/20 text-[#38bdf8] animate-pulse' : (isFirst ? 'bg-sky-500/15 text-[#38bdf8]' : 'bg-slate-500/15 theme-muted')}">
+                                                ${isActivelyCounting ? '▶ En curso' : (isFirst ? 'Siguiente' : `#${index + 1} En cola`)}
+                                            </span>
+                                        </div>
+                                        <p class="text-xs sm:text-sm font-semibold theme-text wrap-task-text">${escapeHTML(block.name)}</p>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <span class="font-mono text-xs sm:text-sm font-bold ${isFirst ? 'text-[#38bdf8]' : 'theme-muted'}">
+                                            ${formatClock(block.remainingSeconds)}
+                                        </span>
+                                        <button type="button" onclick="completeTimeBlockTask('${block.id}')" title="Marcar completada" aria-label="Completar bloque" class="w-6 h-6 rounded bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-500 text-xs font-bold flex items-center justify-center transition cursor-pointer">✓</button>
+                                        <button type="button" onclick="deleteTimeBlockTask('${block.id}')" title="Eliminar bloque" aria-label="Eliminar bloque" class="w-6 h-6 rounded bg-red-500/15 hover:bg-red-500/30 text-red-400 text-xs font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+                                    </div>
+                                </div>
+                                <div class="w-full h-1.5 bg-slate-500/20 rounded-full overflow-hidden">
+                                    <div class="h-full bg-[#38bdf8] transition-all duration-300 rounded-full" style="width: ${elapsedPct}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            if (compWrapperEl && compCountEl && compListEl) {
+                if (completedCount === 0) {
+                    compWrapperEl.classList.add('hidden');
+                } else {
+                    compWrapperEl.classList.remove('hidden');
+                    compCountEl.textContent = completedCount;
+                    compListEl.innerHTML = state.completedTimeBlocks.map((b) => `
+                        <li class="theme-subcard border rounded-lg px-2.5 py-1.5 flex items-center justify-between gap-2 text-xs min-w-0 opacity-75">
+                            <span class="line-through theme-text wrap-task-text flex-1 min-w-0">✓ ${escapeHTML(b.name)}</span>
+                            <span class="font-mono text-[11px] text-emerald-500 shrink-0">${Math.round(b.totalSeconds / 60)} min</span>
+                        </li>
+                    `).join('');
+                }
+            }
+        }
+
+        /* =====================================================================
+           7. HORARIO DEL DÍA CON ALARMAS EN TIEMPO REAL
+           ===================================================================== */
+        function addScheduleEvent(event) {
+            event.preventDefault();
+            const timeInput = document.getElementById('schedule-time');
+            const textInput = document.getElementById('schedule-text');
+
+            const time = timeInput.value;
+            const text = textInput.value.trim();
+            if (!time || !text) return;
+
+            state.scheduleEvents.push({
+                id: 'sch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                time,
+                text,
+                triggeredDateKey: ''
+            });
+
+            state.scheduleEvents.sort((a, b) => a.time.localeCompare(b.time));
+            textInput.value = '';
+            renderScheduleList();
+            saveAppState();
+        }
+
+        function deleteScheduleEvent(id) {
+            state.scheduleEvents = state.scheduleEvents.filter((ev) => ev.id !== id);
+            renderScheduleList();
+            saveAppState();
+        }
+
+        function renderScheduleList() {
+            const listEl = document.getElementById('schedule-list');
+            if (!listEl) return;
+
+            if (state.scheduleEvents.length === 0) {
+                listEl.innerHTML = `
+                    <li class="theme-subcard border border-dashed rounded-xl p-3.5 text-center text-xs theme-muted">
+                        Añade tus bloques horarios para recibir un aviso cuando llegue la hora.
+                    </li>
+                `;
+                return;
+            }
+
+            const now = new Date();
+            const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+            listEl.innerHTML = state.scheduleEvents.map((ev) => {
+                const isNow = ev.time === currentHHMM;
+                return `
+                    <li class="theme-subcard border ${isNow ? 'border-amber-500 bg-amber-500/10' : ''} rounded-lg px-3 py-2 flex items-start justify-between gap-2.5 min-w-0">
+                        <div class="flex items-start gap-2 min-w-0 flex-1">
+                            <span class="font-mono text-xs font-bold px-2 py-0.5 rounded ${isNow ? 'bg-amber-500 text-slate-950' : 'bg-emerald-500/15 text-emerald-500'} shrink-0">
+                                ${escapeHTML(ev.time)}
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-xs sm:text-sm font-medium theme-text wrap-task-text">${escapeHTML(ev.text)}</p>
+                                ${isNow ? '<span class="inline-block mt-0.5 text-[10px] font-extrabold uppercase tracking-wider text-amber-500">⏰ ¡Es la hora!</span>' : ''}
+                            </div>
+                        </div>
+                        <button type="button" onclick="deleteScheduleEvent('${ev.id}')" aria-label="Eliminar evento" class="theme-muted hover:text-[#ef4444] text-xs font-bold px-1 rounded transition cursor-pointer shrink-0">✕</button>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        function checkScheduleAlarms() {
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+
+            const clockEl = document.getElementById('schedule-live-clock');
+            if (clockEl) {
+                clockEl.textContent = `🕒 ${hh}:${mm}:${ss}`;
+            }
+
+            const currentHHMM = `${hh}:${mm}`;
+            const dateMinuteKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}_${currentHHMM}`;
+
+            let anyTriggered = false;
+            state.scheduleEvents.forEach((ev) => {
+                if (ev.time === currentHHMM && ev.triggeredDateKey !== dateMinuteKey) {
+                    ev.triggeredDateKey = dateMinuteKey;
+                    anyTriggered = true;
+
+                    const banner = document.getElementById('schedule-alarm-banner');
+                    const bannerText = document.getElementById('schedule-alarm-text');
+                    if (banner && bannerText) {
+                        bannerText.textContent = `${ev.time} — ${ev.text}`;
+                        banner.classList.remove('hidden');
+                    }
+
+                    playGentleChime('alarm');
+                    showNotification('¡Hora de empezar!', `Actividad programada (${ev.time}): ${ev.text}`, 'alarm');
+                }
+            });
+
+            if (state.lastCheckedMinuteKey !== dateMinuteKey) {
+                state.lastCheckedMinuteKey = dateMinuteKey;
+                renderScheduleList();
+            }
+
+            if (anyTriggered) {
+                renderScheduleList();
+                saveAppState();
+            }
+        }
+
+        function dismissScheduleAlarmBanner() {
+            const banner = document.getElementById('schedule-alarm-banner');
+            if (banner) banner.classList.add('hidden');
+        }
+
+        /* =====================================================================
+           8. SINTETIZADOR DE MÚSICA DE FOCO Y CAMPANAS (WEB AUDIO API)
+           ===================================================================== */
+        function ensureAudioContext() {
+            if (!state.audioCtx) {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (AudioContextClass) {
+                    state.audioCtx = new AudioContextClass();
+                }
+            }
+            if (state.audioCtx && state.audioCtx.state === 'suspended') {
+                state.audioCtx.resume().catch(() => {});
+            }
+            return state.audioCtx;
+        }
+
+        function playGentleChime(type = 'task') {
+            const ctx = ensureAudioContext();
+            if (!ctx) return;
+
+            const now = ctx.currentTime;
+            const freqs = type === 'alarm'
+                ? [523.25, 659.25, 783.99, 1046.5]
+                : type === 'phase'
+                    ? [440, 554.37, 659.25]
+                    : [523.25, 659.25];
+
+            freqs.forEach((freq, idx) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+
+                gain.gain.setValueAtTime(0.0001, now + idx * 0.12);
+                gain.gain.exponentialRampToValueAtTime(0.12, now + idx * 0.12 + 0.04);
+                gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.12 + 0.65);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.start(now + idx * 0.12);
+                osc.stop(now + idx * 0.12 + 0.7);
+            });
+        }
+
+        function stopAmbientNodes() {
+            if (!state.ambientNodes) return;
+            const { oscillators = [], intervals = [], masterGain } = state.ambientNodes;
+
+            intervals.forEach((id) => clearInterval(id));
+            oscillators.forEach((node) => {
+                try {
+                    node.stop();
+                    node.disconnect();
+                } catch (e) {}
+            });
+            if (masterGain) {
+                try {
+                    masterGain.disconnect();
+                } catch (e) {}
+            }
+            state.ambientNodes = null;
+        }
+
+        function startAmbientSound(soundType) {
+            const ctx = ensureAudioContext();
+            if (!ctx) return;
+
+            stopAmbientNodes();
+
+            const masterGain = ctx.createGain();
+            const normalizedVol = Math.max(0.0001, (state.musicVolume / 100) * 0.28);
+            masterGain.gain.setValueAtTime(normalizedVol, ctx.currentTime);
+            masterGain.connect(ctx.destination);
+
+            const oscillators = [];
+            const intervals = [];
+
+            if (soundType === 'alfa' || soundType === 'theta') {
+                const baseFreq = soundType === 'alfa' ? 200 : 180;
+                const beatHz = soundType === 'alfa' ? 10 : 6;
+
+                const merger = ctx.createChannelMerger(2);
+                const oscLeft = ctx.createOscillator();
+                const oscRight = ctx.createOscillator();
+                const padOsc = ctx.createOscillator();
+                const padGain = ctx.createGain();
+
+                oscLeft.type = 'sine';
+                oscRight.type = 'sine';
+                oscLeft.frequency.value = baseFreq;
+                oscRight.frequency.value = baseFreq + beatHz;
+
+                padOsc.type = 'triangle';
+                padOsc.frequency.value = baseFreq / 2;
+                padGain.gain.value = 0.22;
+
+                oscLeft.connect(merger, 0, 0);
+                oscRight.connect(merger, 0, 1);
+                merger.connect(masterGain);
+
+                padOsc.connect(padGain);
+                padGain.connect(masterGain);
+
+                oscLeft.start();
+                oscRight.start();
+                padOsc.start();
+                oscillators.push(oscLeft, oscRight, padOsc);
+            } else if (soundType === 'white' || soundType === 'brown') {
+                const bufferSize = ctx.sampleRate * 3;
+                const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+
+                let lastOut = 0.0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    if (soundType === 'brown') {
+                        output[i] = (lastOut + 0.02 * white) / 1.02;
+                        lastOut = output[i];
+                        output[i] *= 3.2;
+                    } else {
+                        output[i] = white * 0.45;
+                    }
+                }
+
+                const noiseSource = ctx.createBufferSource();
+                noiseSource.buffer = noiseBuffer;
+                noiseSource.loop = true;
+
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = soundType === 'brown' ? 420 : 1800;
+
+                noiseSource.connect(filter);
+                filter.connect(masterGain);
+                noiseSource.start();
+                oscillators.push(noiseSource);
+            } else {
+                // Ambiente Zen / Acordes evolutivos
+                const chords = [
+                    [261.63, 329.63, 392.00],
+                    [220.00, 261.63, 329.63],
+                    [174.61, 220.00, 261.63],
+                    [196.00, 246.94, 293.66]
+                ];
+                let chordIdx = 0;
+
+                const chordOscs = chords[0].map((freq) => {
+                    const osc = ctx.createOscillator();
+                    const g = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+                    g.gain.value = 0.25;
+                    osc.connect(g);
+                    g.connect(masterGain);
+                    osc.start();
+                    oscillators.push(osc);
+                    return osc;
+                });
+
+                const chordTimer = setInterval(() => {
+                    if (!state.audioCtx) return;
+                    chordIdx = (chordIdx + 1) % chords.length;
+                    const nextChord = chords[chordIdx];
+                    chordOscs.forEach((osc, i) => {
+                        osc.frequency.setTargetAtTime(nextChord[i], state.audioCtx.currentTime, 0.8);
+                    });
+                }, 4500);
+                intervals.push(chordTimer);
+            }
+
+            state.ambientNodes = { oscillators, intervals, masterGain };
+        }
+
+        function toggleAmbientMusic() {
+            const btnIcon = document.getElementById('music-btn-icon');
+            const btnText = document.getElementById('music-btn-text');
+
+            if (state.isMusicPlaying) {
+                stopAmbientNodes();
+                state.isMusicPlaying = false;
+                if (btnIcon) btnIcon.textContent = '🎵';
+                if (btnText) btnText.textContent = 'Play';
+            } else {
+                startAmbientSound(state.selectedSound);
+                state.isMusicPlaying = true;
+                if (btnIcon) btnIcon.textContent = '⏸️';
+                if (btnText) btnText.textContent = 'Pausar';
+            }
+        }
+
+        function handleSoundSelectionChange() {
+            const selector = document.getElementById('sound-selector');
+            if (!selector) return;
+            state.selectedSound = selector.value;
+            if (state.isMusicPlaying) {
+                startAmbientSound(state.selectedSound);
+            }
+            saveAppState();
+        }
+
+        function updateVolumeDisplayUI(vol) {
+            const labelEl = document.getElementById('music-volume-label');
+            const muteBtn = document.getElementById('volume-mute-btn');
+            if (labelEl) labelEl.textContent = `${vol}%`;
+            if (muteBtn) {
+                if (vol === 0) muteBtn.textContent = '🔇';
+                else if (vol < 50) muteBtn.textContent = '🔉';
+                else muteBtn.textContent = '🔊';
+            }
+        }
+
+        function toggleMuteVolume() {
+            const volSlider = document.getElementById('music-volume');
+            if (state.musicVolume > 0) {
+                state.previousVolume = state.musicVolume;
+                if (volSlider) volSlider.value = 0;
+                updateMusicVolume(0);
+            } else {
+                const restored = state.previousVolume > 0 ? state.previousVolume : 65;
+                if (volSlider) volSlider.value = restored;
+                updateMusicVolume(restored);
+            }
+        }
+
+        function updateMusicVolume(sliderValue) {
+            const clamped = Math.max(0, Math.min(100, Number(sliderValue)));
+            state.musicVolume = clamped;
+            if (clamped > 0) {
+                state.previousVolume = clamped;
+            }
+            updateVolumeDisplayUI(clamped);
+            const normalized = clamped / 100;
+
+            if (state.ambientNodes && state.ambientNodes.masterGain && state.audioCtx) {
+                const targetGain = Math.max(0.0001, normalized * 0.28);
+                state.ambientNodes.masterGain.gain.setTargetAtTime(targetGain, state.audioCtx.currentTime, 0.08);
+            }
+            saveAppState();
+        }
+
+        /* =====================================================================
+           9. LECTOR DE PDFs FUNCIONAL (PDF.JS + FALLBACK + MEMORIA DE PÁGINA)
+           ===================================================================== */
+        function triggerPdfFilePicker() {
+            const input = document.getElementById('pdf-file-input');
+            if (input) input.click();
+        }
+
+        function handlePdfFileSelect(event) {
+            const file = event.target.files && event.target.files[0];
+            if (file) {
+                loadPdfFile(file);
+            }
+            event.target.value = '';
+        }
+
+        function setupPdfDragAndDrop() {
+            const dropzone = document.getElementById('pdf-dropzone');
+            if (!dropzone) return;
+
+            ['dragenter', 'dragover'].forEach((evtName) => {
+                dropzone.addEventListener(evtName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.add('pdf-dropzone-active');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach((evtName) => {
+                dropzone.addEventListener(evtName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    dropzone.classList.remove('pdf-dropzone-active');
+                });
+            });
+
+            dropzone.addEventListener('drop', (e) => {
+                const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+                if (file) {
+                    loadPdfFile(file);
+                }
+            });
+        }
+
+        async function loadPdfFile(file) {
+            if (!file) return;
+            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+            if (!isPdf) {
+                showNotification('Formato no compatible', 'Por favor, selecciona un archivo con extensión .pdf', 'info');
+                return;
+            }
+
+            if (state.pdfObjectUrl) {
+                URL.revokeObjectURL(state.pdfObjectUrl);
+            }
+            state.pdfObjectUrl = URL.createObjectURL(file);
+            state.pdfFileName = file.name;
+
+            const docNameEl = document.getElementById('pdf-doc-name');
+            const closeBtn = document.getElementById('pdf-close-btn');
+            const toolbarEl = document.getElementById('pdf-toolbar');
+            const dropzoneEl = document.getElementById('pdf-dropzone');
+            const wrapperEl = document.getElementById('pdf-viewer-wrapper');
+            const canvasContainer = document.getElementById('pdf-canvas-container');
+            const iframeEl = document.getElementById('pdf-fallback-iframe');
+
+            if (docNameEl) {
+                docNameEl.textContent = file.name;
+                docNameEl.classList.remove('hidden');
+            }
+            if (closeBtn) closeBtn.classList.remove('hidden');
+            if (dropzoneEl) dropzoneEl.classList.add('hidden');
+            if (wrapperEl) wrapperEl.classList.remove('hidden');
+
+            const savedPage = state.pdfLastPages[file.name] || 1;
+
+            try {
+                if (!window.pdfjsLib) {
+                    throw new Error('PDF.js no disponible');
+                }
+                const arrayBuffer = await file.arrayBuffer();
+                const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+                state.pdfDoc = await loadingTask.promise;
+                state.pdfUsingFallback = false;
+                state.pdfTotalPages = state.pdfDoc.numPages;
+                state.pdfCurrentPage = Math.max(1, Math.min(state.pdfTotalPages, savedPage));
+
+                if (toolbarEl) toolbarEl.classList.remove('hidden');
+                if (canvasContainer) canvasContainer.classList.remove('hidden');
+                if (iframeEl) iframeEl.classList.add('hidden');
+
+                const countEl = document.getElementById('pdf-page-count');
+                const pageInput = document.getElementById('pdf-page-input');
+                if (countEl) countEl.textContent = state.pdfTotalPages;
+                if (pageInput) pageInput.max = state.pdfTotalPages;
+
+                await renderPdfPage(state.pdfCurrentPage);
+            } catch (err) {
+                console.warn('Usando visor PDF integrado del navegador:', err);
+                state.pdfDoc = null;
+                state.pdfUsingFallback = true;
+                if (toolbarEl) toolbarEl.classList.add('hidden');
+                if (canvasContainer) canvasContainer.classList.add('hidden');
+                if (iframeEl) {
+                    iframeEl.src = state.pdfObjectUrl;
+                    iframeEl.classList.remove('hidden');
+                }
+                state.lastPdfMeta = { name: file.name, page: savedPage };
+                saveAppState();
+            }
+        }
+
+        async function renderPdfPage(pageNum) {
+            if (!state.pdfDoc || state.pdfUsingFallback) return;
+
+            const safePage = Math.max(1, Math.min(state.pdfTotalPages, pageNum));
+            state.pdfCurrentPage = safePage;
+
+            const spinner = document.getElementById('pdf-loading-spinner');
+            const canvas = document.getElementById('pdf-render-canvas');
+            const wrapper = document.getElementById('pdf-viewer-wrapper');
+            const pageInput = document.getElementById('pdf-page-input');
+            const prevBtn = document.getElementById('pdf-prev-btn');
+            const nextBtn = document.getElementById('pdf-next-btn');
+            const zoomLabel = document.getElementById('pdf-zoom-level');
+
+            if (pageInput) pageInput.value = safePage;
+            if (prevBtn) prevBtn.disabled = safePage <= 1;
+            if (nextBtn) nextBtn.disabled = safePage >= state.pdfTotalPages;
+            if (spinner) spinner.classList.remove('hidden');
+
+            try {
+                if (state.pdfRenderTask && typeof state.pdfRenderTask.cancel === 'function') {
+                    try {
+                        state.pdfRenderTask.cancel();
+                    } catch (e) {}
+                }
+
+                const page = await state.pdfDoc.getPage(safePage);
+                const unscaledViewport = page.getViewport({ scale: 1 });
+
+                if (state.pdfFitWidth && wrapper) {
+                    const availableWidth = Math.max(260, wrapper.clientWidth - 40);
+                    state.pdfScale = Math.max(0.4, Math.min(3.0, availableWidth / unscaledViewport.width));
+                }
+
+                if (zoomLabel) {
+                    zoomLabel.textContent = `${Math.round(state.pdfScale * 100)}%`;
+                }
+
+                const outputScale = window.devicePixelRatio || 1;
+                const viewport = page.getViewport({ scale: state.pdfScale });
+                const context = canvas.getContext('2d');
+
+                canvas.width = Math.floor(viewport.width * outputScale);
+                canvas.height = Math.floor(viewport.height * outputScale);
+                canvas.style.width = `${Math.floor(viewport.width)}px`;
+                canvas.style.height = `${Math.floor(viewport.height)}px`;
+
+                const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+                state.pdfRenderTask = page.render({
+                    canvasContext: context,
+                    transform,
+                    viewport
+                });
+
+                await state.pdfRenderTask.promise;
+
+                if (state.pdfFileName) {
+                    state.pdfLastPages[state.pdfFileName] = safePage;
+                    state.lastPdfMeta = { name: state.pdfFileName, page: safePage };
+                    saveAppState();
+                }
+            } catch (err) {
+                if (err && err.name !== 'RenderingCancelledException') {
+                    console.warn('Error renderizando página PDF:', err);
+                }
+            } finally {
+                if (spinner) spinner.classList.add('hidden');
+            }
+        }
+
+        function prevPdfPage() {
+            if (state.pdfCurrentPage > 1) {
+                renderPdfPage(state.pdfCurrentPage - 1);
+            }
+        }
+
+        function nextPdfPage() {
+            if (state.pdfCurrentPage < state.pdfTotalPages) {
+                renderPdfPage(state.pdfCurrentPage + 1);
+            }
+        }
+
+        function jumpToPdfPage(val) {
+            const target = parseInt(val, 10);
+            if (!Number.isFinite(target)) return;
+            renderPdfPage(target);
+        }
+
+        function zoomInPdf() {
+            state.pdfFitWidth = false;
+            state.pdfScale = Math.min(3.0, +(state.pdfScale + 0.15).toFixed(2));
+            renderPdfPage(state.pdfCurrentPage);
+        }
+
+        function zoomOutPdf() {
+            state.pdfFitWidth = false;
+            state.pdfScale = Math.max(0.4, +(state.pdfScale - 0.15).toFixed(2));
+            renderPdfPage(state.pdfCurrentPage);
+        }
+
+        function fitWidthPdf() {
+            state.pdfFitWidth = true;
+            renderPdfPage(state.pdfCurrentPage);
+        }
+
+        function updatePdfLastReadHint() {
+            const hintEl = document.getElementById('pdf-last-read-hint');
+            if (!hintEl) return;
+            if (state.lastPdfMeta && state.lastPdfMeta.name) {
+                hintEl.textContent = `Último PDF leído: ${state.lastPdfMeta.name} (Página ${state.lastPdfMeta.page || 1})`;
+                hintEl.classList.remove('hidden');
+            } else {
+                hintEl.classList.add('hidden');
+            }
+        }
+
+        function setPdfFullscreenState(isFullscreen) {
+            const section = document.getElementById('pdf-reader-section');
+            const wrapper = document.getElementById('pdf-viewer-wrapper');
+            const btn = document.getElementById('pdf-expand-btn');
+            if (!section || !wrapper || !btn) return;
+
+            state.pdfIsExpanded = isFullscreen;
+            if (isFullscreen) {
+                section.classList.remove('w-full', 'max-w-[1440px]', 'mx-auto', 'rounded-xl', 'border');
+                section.classList.add('fixed', 'inset-0', 'z-50', 'w-screen', 'h-screen', 'max-w-none', 'rounded-none', 'flex', 'flex-col', 'm-0');
+                wrapper.classList.remove('h-[460px]', 'sm:h-[600px]');
+                wrapper.classList.add('flex-1', 'h-auto');
+                document.body.classList.add('overflow-hidden');
+                btn.textContent = '🗕 Salir pantalla completa';
+            } else {
+                section.classList.remove('fixed', 'inset-0', 'z-50', 'w-screen', 'h-screen', 'max-w-none', 'rounded-none', 'flex', 'flex-col', 'm-0');
+                section.classList.add('w-full', 'max-w-[1440px]', 'mx-auto', 'rounded-xl', 'border');
+                wrapper.classList.remove('flex-1', 'h-auto');
+                wrapper.classList.add('h-[460px]', 'sm:h-[600px]');
+                document.body.classList.remove('overflow-hidden');
+                btn.textContent = '⛶ Expandir';
+            }
+
+            if (state.pdfDoc && state.pdfFitWidth) {
+                renderPdfPage(state.pdfCurrentPage);
+            }
+        }
+
+        function togglePdfExpand() {
+            setPdfFullscreenState(!state.pdfIsExpanded);
+        }
+
+        function closePdfDocument() {
+            if (state.pdfIsExpanded) {
+                setPdfFullscreenState(false);
+            }
+            if (state.pdfObjectUrl) {
+                URL.revokeObjectURL(state.pdfObjectUrl);
+                state.pdfObjectUrl = null;
+            }
+            state.pdfDoc = null;
+            state.pdfFileName = '';
+            state.pdfTotalPages = 0;
+
+            document.getElementById('pdf-doc-name').classList.add('hidden');
+            document.getElementById('pdf-close-btn').classList.add('hidden');
+            document.getElementById('pdf-toolbar').classList.add('hidden');
+            document.getElementById('pdf-viewer-wrapper').classList.add('hidden');
+            document.getElementById('pdf-dropzone').classList.remove('hidden');
+            document.getElementById('pdf-fallback-iframe').src = '';
+
+            updatePdfLastReadHint();
+        }
+
+        function setupPdfKeyboardAndTouch() {
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    const resetModal = document.getElementById('reset-confirm-modal');
+                    if (resetModal && !resetModal.classList.contains('hidden')) {
+                        closeResetModal();
+                        return;
+                    }
+                    if (state.pdfIsExpanded) {
+                        e.preventDefault();
+                        setPdfFullscreenState(false);
+                        return;
+                    }
+                }
+                if (!state.pdfDoc || state.pdfUsingFallback) return;
+                const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+                if (activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select') return;
+
+                if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+                    e.preventDefault();
+                    nextPdfPage();
+                } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+                    e.preventDefault();
+                    prevPdfPage();
+                }
+            });
+
+            let resizeTimer = null;
+            window.addEventListener('resize', () => {
+                if (!state.pdfDoc || !state.pdfFitWidth) return;
+                if (resizeTimer) clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(() => {
+                    renderPdfPage(state.pdfCurrentPage);
+                }, 180);
+            });
+        }
+
+        // Escapado seguro para texto introducido por el usuario
+        function escapeHTML(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // Inicialización de vistas y comprobador de alarmas cada segundo
+        window.addEventListener('DOMContentLoaded', () => {
+            loadPersistedData();
+            updateTimerUI();
+            updateAchievementsUI(false);
+            renderEisenhowerMatrix();
+            renderTimeBlockingQueue();
+            renderScheduleList();
+            setupPdfDragAndDrop();
+            setupPdfKeyboardAndTouch();
+            checkScheduleAlarms();
+            setInterval(checkScheduleAlarms, 1000);
+        });
+    </script>
+</body>
+</html>
